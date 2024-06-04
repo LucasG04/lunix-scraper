@@ -2,6 +2,7 @@ import axios from "axios";
 import cheerio from "cheerio";
 import { Recipe } from "../types";
 import { cleanText, extractNumber } from "../utils";
+import { parseIngredient } from "../utils/parse-ingredients";
 
 export const scrape = async (url: string): Promise<Recipe> => {
   const response = await axios.get(url);
@@ -34,7 +35,12 @@ export const scrape = async (url: string): Promise<Recipe> => {
       ingredientsSet.add(ingredient);
     }
   );
-  const ingredients = Array.from(ingredientsSet);
+  const ingredientsArray = Array.from(ingredientsSet);
+  const ingredients = await Promise.all(
+    ingredientsArray.map(
+      async (ingredient) => await parseIngredient(ingredient)
+    )
+  );
 
   // Scrape steps
   const steps: string[] = [];

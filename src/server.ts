@@ -2,6 +2,7 @@ import { config as configureDotenv } from "dotenv";
 import express, { Request, Response } from "express";
 import { scrape as scrapeNinja } from "./scrapers/ninja-scraper";
 import { apiKeyAuthMiddleware, fetchAllApiKeys } from "./middleware";
+import OpenAI from "openai";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -11,6 +12,11 @@ app.use(apiKeyAuthMiddleware);
 
 configureDotenv();
 fetchAllApiKeys();
+
+const openaiClient = new OpenAI({
+  apiKey: process.env["OPENAI_API_KEY"],
+});
+export const openai = () => openaiClient;
 
 app.get("", async (req: Request, res: Response) => {
   return res.status(200).json({ status: "UP" });
@@ -26,9 +32,10 @@ app.get("/scrape-ninja", async (req: Request, res: Response) => {
     const recipe = await scrapeNinja(url);
     res.json(recipe);
   } catch (error) {
+    console.error("500 /scrape-ninja", error);
     res
       .status(500)
-      .json({ error: "An error occurred while scraping the recipe." });
+      .json({ message: "An error occurred while scraping the recipe.", error });
   }
 });
 
