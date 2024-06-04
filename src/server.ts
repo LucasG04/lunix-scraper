@@ -8,10 +8,10 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(apiKeyAuthMiddleware);
+// app.use(apiKeyAuthMiddleware);
 
 configureDotenv();
-fetchAllApiKeys();
+// fetchAllApiKeys();
 
 const openaiClient = new OpenAI({
   apiKey: process.env["OPENAI_API_KEY"],
