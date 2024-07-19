@@ -37,11 +37,12 @@ const parseIngredientByRegex = (ingredient: string): Ingredient | undefined => {
 const parseIngredientByChatGPT = async (
   ingredient: string
 ): Promise<Ingredient | undefined> => {
-  const prompt = `Parse the following ingredient into amount, unit, and name: "${ingredient}". Respond ONLY in JSON format with keys 'amount' (number), 'unit', and 'name'. Use "null" as fallback.`;
+  const prompt = `Parse the following ingredient into amount, unit, and name: "${ingredient}". Respond ONLY with plain JSON without formatting. Use the JSON keys 'amount' (number), 'unit', and 'name'. Use "null" as fallback.`;
 
   try {
     const response = await openai().chat.completions.create({
-      model: "gpt-3.5-turbo",
+      // model: "gpt-3.5-turbo",
+      model: "gpt-4o-mini",
       messages: [{ role: "user", content: prompt }],
       temperature: 0.5,
       max_tokens: 100,
