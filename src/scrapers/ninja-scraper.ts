@@ -74,10 +74,15 @@ export const processNinjaCheerio = async ($: any) => {
   );
 
   // Scrape image
-  const image =
-    $(".single-hero")
-      .css("background-image")
-      ?.replace(/url\(["']?(.+?)["']?\)/, "$1") ?? "";
+  let image = "";
+  try {
+    image =
+      $(".single-hero")
+        .css("background-image")
+        ?.replace(/url\(["']?(.+?)["']?\)/, "$1") ?? "";
+  } catch (error) {
+    console.error("Error parsing image:", error);
+  }
 
   return {
     title,
