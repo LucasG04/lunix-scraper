@@ -1,34 +1,6 @@
-import axios from "axios";
-import cheerio from "cheerio";
 import { Recipe } from "../types";
 import { cleanText, extractNumber } from "../utils";
 import { parseIngredient } from "../utils/parse-ingredients";
-import Crawler from "crawler";
-
-// export const scrape = async (url: string): Promise<Recipe> => {
-//   // const response = await axios.get(url, {
-//   //   headers: {
-//   //     "User-Agent":
-//   //       "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/55.0.2883.95 Safari/537.36",
-//   //   },
-//   // });
-//   // const html = response.data;
-//   // const $ = cheerio.load(html);
-
-//   crawler.queue({
-//     uri: url,
-//     callback: async (error, res, done) => {
-//       if (error) {
-//         console.error(error);
-//       } else {
-//         const $ = cheerio.load(res.body);
-//         const recipe = await parseRecipe($);
-//         console.log(recipe);
-//       }
-//       done();
-//     },
-//   });
-// };
 
 export const processNinjaCheerio = async ($: any) => {
   // Scrape title

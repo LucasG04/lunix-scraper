@@ -1,14 +1,9 @@
-import { openai } from "../server";
+import { openai } from "../openai";
 import { Ingredient } from "../types";
 
 export const parseIngredient = async (
   ingredient: string
 ): Promise<Ingredient> => {
-  //   const byRegex = parseIngredientByRegex(ingredient);
-  //   if (byRegex) {
-  //     return byRegex;
-  //   }
-
   const byChatGPT = await parseIngredientByChatGPT(ingredient);
   if (byChatGPT) {
     return byChatGPT;
