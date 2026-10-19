@@ -5,40 +5,29 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Commands
 
 ```bash
-# Run the server (uses bun for direct TypeScript execution, no build step needed)
-npm start  # runs: bun run src/server.ts
-
-# Type-check without running
-npx tsc --noEmit
+python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
+API_KEY_DEV=123 .venv/bin/uvicorn main:app --port 3000 --reload
 ```
 
 There are no tests and no lint scripts configured.
 
 ## Architecture
 
-This is an Express HTTP server that scrapes recipe data from ninja kitchen websites and parses it into a structured format.
+Single-file FastAPI service (`main.py`) that fetches a recipe page and extracts it with [recipe-scrapers](https://docs.recipe-scrapers.com/). Called only by lunix-api (`fetchScrapedRecipe` in `lunix-api/src/foodly/import.ts`).
 
-### Request flow
-
-1. Client sends `GET /scrape-ninja?url=<recipe-url>` with an `x-api-key` header
-2. `apiKeyAuthMiddleware` in `src/middleware.ts` validates the key against all env vars prefixed `API_KEY_` (loaded at startup via `fetchAllApiKeys`)
-3. `src/server.ts` fetches the URL directly with `fetch()` using a browser User-Agent, then loads the HTML into Cheerio
-4. `processNinjaCheerio` in `src/scrapers/ninja-scraper.ts` extracts title, total time, servings, ingredients, steps, and image from the Cheerio-loaded DOM
-5. Each raw ingredient string is sent to OpenAI via `parseIngredientByChatGPT` to parse it into `{ amount, unit, name }`
-
-### Key design details
-
-- The `openai` client is a lazy singleton exported as `openai()` from `src/openai.ts` and imported by `src/utils/parse-ingredients.ts`.
-- Only metric ingredients are scraped (selector `[data-unit="metric"]`); a regex-based parser (`parseIngredientByRegex`) exists in the file but is commented out in favor of GPT parsing.
-- API keys are loaded once at startup; adding new `API_KEY_*` env vars requires a server restart.
+- `GET /scrape?url=<recipe-url>` with `x-api-key` → `{ title, totalTime, servings, image, kcal, instructions: string[], ingredientGroups: [{ purpose, ingredients: string[] }] }`. Ingredients are raw lines; lunix-api parses them into amount/unit/name.
+- `scrape_html(..., supported_only=False)`: site-specific scraper for the ~740 supported hosts, generic schema.org fallback for everything else.
+- Errors: 400 bad/blocked URL, 502 fetch failed, 404 no recipe (no title or no ingredients).
+- `block_private_hosts` (httpx request hook, runs on every redirect hop) rejects non-public IPs (SSRF guard); resolves `raw_host` (IDNA-encoded, what httpx connects to). Not DNS-rebinding safe (accepted).
+- Fetch limits: 5 MB body, 20 s total (`MAX_PAGE_BYTES`, `FETCH_DEADLINE_SECONDS`); parsing runs in a thread (`asyncio.to_thread`); `Accept-Encoding: identity` so the cap applies to real bytes. Charset: Content-Type, else `<meta charset>`, else UTF-8. 502 details stay generic, causes are logged.
+- API keys = all non-empty `API_KEY_*` env vars, read at startup (restart to add keys). Applies to every route, incl. health `GET /`.
 
 ### Environment variables
 
-| Variable         | Purpose                                                                    |
-| ---------------- | -------------------------------------------------------------------------- |
-| `OPENAI_API_KEY` | OpenAI API key for ingredient parsing                                      |
-| `API_KEY_*`      | One or more API keys for authenticating requests (e.g. `API_KEY_TEST=abc`) |
-| `PORT`           | Server port (default: 3000)                                                |
+| Variable    | Purpose                                                                    |
+| ----------- | -------------------------------------------------------------------------- |
+| `API_KEY_*` | One or more API keys for authenticating requests (e.g. `API_KEY_TEST=abc`) |
+| `PORT`      | Server port in Docker (default: 3000)                                      |
 
 ### Deployment
 

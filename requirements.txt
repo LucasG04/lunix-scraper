@@ -1,0 +1,4 @@
+fastapi==0.148.0
+httpx==0.28.1
+recipe-scrapers==15.13.0
+uvicorn==0.54.0
