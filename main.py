@@ -4,6 +4,7 @@ import logging
 import os
 import re
 import socket
+import zlib
 from typing import Annotated
 from urllib.parse import urlsplit
 
@@ -94,10 +95,21 @@ async def fetch_html(url: str) -> tuple[str, str]:
         async with asyncio.timeout(FETCH_DEADLINE_SECONDS), http.stream("GET", url) as response:
             if response.is_error:
                 raise fetch_failed(url, response.status_code)
+            # Servers may compress despite "identity": decode raw bytes ourselves so the
+            # cap bounds the *decompressed* size (no decompression bombs).
+            encoding = response.headers.get("content-encoding", "identity").strip().lower()
+            if encoding in ("gzip", "x-gzip", "deflate"):
+                decoder = zlib.decompressobj(wbits=47)  # auto-detects gzip / zlib header
+            elif encoding in ("", "identity"):
+                decoder = None
+            else:
+                raise fetch_failed(url, f"unsupported Content-Encoding {encoding}")
             body = bytearray()
-            async for chunk in response.aiter_bytes():
+            async for chunk in response.aiter_raw():
+                if decoder:
+                    chunk = decoder.decompress(chunk, MAX_PAGE_BYTES + 1 - len(body))
                 body += chunk
-                if len(body) > MAX_PAGE_BYTES:
+                if len(body) > MAX_PAGE_BYTES or (decoder and decoder.unconsumed_tail):
                     raise fetch_failed(url, "page too large")
             return decode_html(bytes(body), response.charset_encoding), str(response.url)
     except (httpx.InvalidURL, ValueError):  # malformed URL / host (incl. UnicodeError)

@@ -19,7 +19,7 @@ Single-file FastAPI service (`main.py`) that fetches a recipe page and extracts 
 - `scrape_html(..., supported_only=False)`: site-specific scraper for the ~740 supported hosts, generic schema.org fallback for everything else.
 - Errors: 400 bad/blocked URL, 502 fetch failed, 404 no recipe (no title or no ingredients).
 - `block_private_hosts` (httpx request hook, runs on every redirect hop) rejects non-public IPs (SSRF guard); resolves `raw_host` (IDNA-encoded, what httpx connects to). Not DNS-rebinding safe (accepted).
-- Fetch limits: 5 MB body, 20 s total (`MAX_PAGE_BYTES`, `FETCH_DEADLINE_SECONDS`); parsing runs in a thread (`asyncio.to_thread`); `Accept-Encoding: identity` so the cap applies to real bytes. Charset: Content-Type, else `<meta charset>`, else UTF-8. 502 details stay generic, causes are logged.
+- Fetch limits: 5 MB body, 20 s total (`MAX_PAGE_BYTES`, `FETCH_DEADLINE_SECONDS`); parsing runs in a thread (`asyncio.to_thread`); `Accept-Encoding: identity`; servers that compress anyway: gzip/deflate decoded with a bounded zlib decoder (cap = decompressed size), other encodings rejected. Charset: Content-Type, else `<meta charset>`, else UTF-8. 502 details stay generic, causes are logged.
 - API keys = all non-empty `API_KEY_*` env vars, read at startup (restart to add keys). Applies to every route, incl. health `GET /`.
 
 ### Environment variables
