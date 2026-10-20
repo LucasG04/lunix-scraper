@@ -1,0 +1,38 @@
+name: CI
+
+# Renovate PRs come from branches in this repo, so they would get secrets: this workflow
+# references none, keeps the token read-only and off disk, and never uses pull_request_target.
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      # Tests run in the production image: same Python and packages that ship.
+      - name: Build image
+        run: docker build -t lunix-scraper .
+
+      - name: Unit tests
+        run: >-
+          docker run --rm -e PYTHONDONTWRITEBYTECODE=1 -v "$PWD:/src:ro" -w /src lunix-scraper
+          sh -c "pip install --no-cache-dir -q -r requirements-dev.txt && python -m pytest -p no:cacheprovider"
+
+      - name: Smoke test
+        run: |
+          docker run -d --name scraper -p 3000:3000 -e API_KEY_CI=ci lunix-scraper
+          for _ in $(seq 30); do
+            curl -fsS -H "x-api-key: ci" localhost:3000/ && exit 0
+            sleep 1
+          done
+          docker logs scraper
+          exit 1

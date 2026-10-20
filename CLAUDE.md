@@ -7,9 +7,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```bash
 python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 API_KEY_DEV=123 .venv/bin/uvicorn main:app --port 3000 --reload
+.venv/bin/pip install -r requirements-dev.txt && .venv/bin/python -m pytest
 ```
 
-There are no tests and no lint scripts configured.
+Tests (`test_main.py`) are offline: `main.http` is swapped for an `httpx.MockTransport` client (responses must use `stream=`, `fetch_html` reads `aiter_raw`); public IP literals like `1.1.1.1` pass the SSRF guard without DNS. No lint configured.
+
+CI (`.github/workflows/ci.yml`, every PR incl. Renovate): builds the production image, runs pytest inside it, smoke-tests `GET /`. Read-only token, no secrets, no `pull_request_target`.
 
 ## Architecture
 
