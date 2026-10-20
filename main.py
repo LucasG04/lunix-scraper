@@ -105,16 +105,18 @@ async def fetch_html(url: str) -> tuple[str, str]:
             else:
                 raise fetch_failed(url, f"unsupported Content-Encoding {encoding}")
             body = bytearray()
+            raw_bytes = 0  # capped too: data after the gzip end lands in unused_data, uncounted by body
             async for chunk in response.aiter_raw():
+                raw_bytes += len(chunk)
                 if decoder:
                     chunk = decoder.decompress(chunk, MAX_PAGE_BYTES + 1 - len(body))
                 body += chunk
-                if len(body) > MAX_PAGE_BYTES or (decoder and decoder.unconsumed_tail):
+                if max(raw_bytes, len(body)) > MAX_PAGE_BYTES or (decoder and decoder.unconsumed_tail):
                     raise fetch_failed(url, "page too large")
             return decode_html(bytes(body), response.charset_encoding), str(response.url)
     except (httpx.InvalidURL, ValueError):  # malformed URL / host (incl. UnicodeError)
         raise HTTPException(400, "Invalid URL")
-    except (httpx.HTTPError, OSError) as error:  # incl. TimeoutError
+    except (httpx.HTTPError, OSError, zlib.error) as error:  # incl. TimeoutError, corrupt gzip
         raise fetch_failed(url, error)
 
 
