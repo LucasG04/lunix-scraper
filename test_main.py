@@ -66,6 +66,12 @@ def test_health():
     assert client.get("/").json() == {"status": "UP"}
 
 
+def test_sites_lists_supported_hosts():
+    sites = client.get("/sites").json()
+    assert "allrecipes.com" in sites
+    assert sites == sorted(sites)
+
+
 def test_extracts_schema_org_recipe(serve):
     serve(lambda request: page())
     response = scrape()

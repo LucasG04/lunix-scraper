@@ -10,7 +10,7 @@ from urllib.parse import urlsplit
 
 import httpx
 from fastapi import Depends, FastAPI, Header, HTTPException
-from recipe_scrapers import scrape_html
+from recipe_scrapers import SCRAPERS, scrape_html
 from recipe_scrapers._exceptions import RecipeScrapersExceptions
 
 API_KEYS = {v for k, v in os.environ.items() if k.startswith("API_KEY_") and v}
@@ -146,6 +146,12 @@ def extract(html: str, url: str) -> dict | None:
 @app.get("/")
 def health():
     return {"status": "UP"}
+
+
+@app.get("/sites")
+def sites():
+    """Hosts with a site-specific scraper; others may still work via the schema.org fallback."""
+    return sorted(SCRAPERS)
 
 
 @app.get("/scrape")

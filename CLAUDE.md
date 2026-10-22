@@ -19,6 +19,7 @@ CI (`.github/workflows/ci.yml`, every PR incl. Renovate): builds the production 
 Single-file FastAPI service (`main.py`) that fetches a recipe page and extracts it with [recipe-scrapers](https://docs.recipe-scrapers.com/). Called only by lunix-api (`fetchScrapedRecipe` in `lunix-api/src/foodly/import.ts`).
 
 - `GET /scrape?url=<recipe-url>` with `x-api-key` → `{ title, totalTime, servings, image, kcal, instructions: string[], ingredientGroups: [{ purpose, ingredients: string[] }] }`. Ingredients are raw lines; lunix-api parses them into amount/unit/name.
+- `GET /sites` with `x-api-key` → sorted hostnames from `recipe_scrapers.SCRAPERS` (lunix-api proxies it for the foodly-web `/recipe-sites` page).
 - `scrape_html(..., supported_only=False)`: site-specific scraper for the ~740 supported hosts, generic schema.org fallback for everything else.
 - Errors: 400 bad/blocked URL, 502 fetch failed, 404 no recipe (no title or no ingredients).
 - `block_private_hosts` (httpx request hook, runs on every redirect hop) rejects non-public IPs (SSRF guard); resolves `raw_host` (IDNA-encoded, what httpx connects to). Not DNS-rebinding safe (accepted).
