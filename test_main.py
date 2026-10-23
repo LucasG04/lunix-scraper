@@ -203,6 +203,7 @@ def browser(monkeypatch):
             return httpx.Response(200, json={"status": status, "message": "", "solution": solution})
 
         monkeypatch.setattr(main, "BYPARR_URL", "http://byparr:8191")
+        monkeypatch.setattr(main, "BROWSER_HOSTS", frozenset({"1.1.1.1"}))  # PAGE's host counts as supported
         monkeypatch.setattr(main, "browser", httpx.AsyncClient(transport=httpx.MockTransport(handler)))
         return requested
 
@@ -242,6 +243,32 @@ def test_browser_failure_is_502(serve, browser, solution, status):
     response = scrape()
     assert response.status_code == 502
     assert response.json() == {"detail": "Failed to fetch URL"}
+
+
+def test_challenge_on_unsupported_host_skips_browser(serve, browser):
+    serve(lambda request: httpx.Response(**CHALLENGE))
+    requested = browser({"status": 200, "url": PAGE, "response": RECIPE_HTML})
+    assert scrape("http://8.8.8.8/recipe").status_code == 502
+    assert requested == []
+
+
+def test_browser_gets_the_challenged_url_after_redirects(serve, browser):
+    def handler(request):
+        if request.url.host == "8.8.8.8":
+            return httpx.Response(301, headers={"location": PAGE})
+        return httpx.Response(**CHALLENGE)
+
+    serve(handler)
+    requested = browser({"status": 200, "url": PAGE, "response": RECIPE_HTML})
+    assert scrape("http://8.8.8.8/short").json()["title"] == "Pancakes"
+    assert requested == [PAGE]
+
+
+def test_browser_allowed_matches_like_recipe_scrapers():
+    assert main.browser_allowed("www.rewe.de")
+    assert main.browser_allowed("rewe.de")
+    assert not main.browser_allowed("rewe.de.evil.example")
+    assert not main.browser_allowed("shop.rewe.de")
 
 
 def test_browser_redirect_to_private_host_is_blocked(serve, browser):

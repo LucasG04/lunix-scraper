@@ -20,6 +20,8 @@ FETCH_DEADLINE_SECONDS = 20  # whole download
 # Cloudflare-challenged pages are re-fetched by a real browser (Byparr); off when unset.
 BYPARR_URL = os.environ.get("BYPARR_URL", "").rstrip("/")
 BROWSER_DEADLINE_SECONDS = 35  # incl. waiting for the slot; lunix-api gives up after 60
+# The browser has no SSRF guard for redirects, subresources and JS: only send it to known recipe sites.
+BROWSER_HOSTS = frozenset(SCRAPERS)
 
 log = logging.getLogger("uvicorn.error")
 
@@ -57,7 +59,11 @@ browser_slot = asyncio.Semaphore(1)
 
 
 class CloudflareChallenge(Exception):
-    pass
+    """Raised with the challenged URL (after redirects)."""
+
+
+def browser_allowed(host: str) -> bool:
+    return host.removeprefix("www.") in BROWSER_HOSTS  # same matching as recipe-scrapers
 
 
 def safe(field):
@@ -106,8 +112,13 @@ async def fetch_html(url: str) -> tuple[str, str]:
     """Page text and final URL (after redirects), capped in size and total time."""
     try:
         async with asyncio.timeout(FETCH_DEADLINE_SECONDS), http.stream("GET", url) as response:
-            if BYPARR_URL and response.status_code == 403 and response.headers.get("cf-mitigated") == "challenge":
-                raise CloudflareChallenge
+            if (
+                BYPARR_URL
+                and response.status_code == 403
+                and response.headers.get("cf-mitigated") == "challenge"
+                and browser_allowed(response.url.host)
+            ):
+                raise CloudflareChallenge(str(response.url))
             if response.is_error:
                 raise fetch_failed(url, response.status_code)
             # Servers may compress despite "identity": decode raw bytes ourselves so the
@@ -205,8 +216,8 @@ async def scrape(url: str):
         raise HTTPException(400, "URL must be http(s)")
     try:
         html, final_url = await fetch_html(url)
-    except CloudflareChallenge:
-        html, final_url = await fetch_html_in_browser(url)
+    except CloudflareChallenge as challenge:
+        html, final_url = await fetch_html_in_browser(challenge.args[0])
     # Parsing is CPU-bound: keep it off the event loop.
     recipe = await asyncio.to_thread(extract, html, final_url)
     if not recipe:
