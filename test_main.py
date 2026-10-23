@@ -187,3 +187,64 @@ def test_decode_html_charset():
     assert "Käse" in main.decode_html(b'<meta charset="iso-8859-1">' + latin, None)
     assert main.decode_html("Käse".encode(), None) == "Käse"
     assert main.decode_html(b"x", "no-such-charset") == "x"
+
+
+CHALLENGE = {"status_code": 403, "headers": {"cf-mitigated": "challenge"}}
+
+
+@pytest.fixture
+def browser(monkeypatch):
+    """Byparr stand-in: answers /v1 with the given solution and records the requested URLs."""
+    requested = []
+
+    def install(solution=None, status="ok"):
+        def handler(request):
+            requested.append(json.loads(request.content)["url"])
+            return httpx.Response(200, json={"status": status, "message": "", "solution": solution})
+
+        monkeypatch.setattr(main, "BYPARR_URL", "http://byparr:8191")
+        monkeypatch.setattr(main, "browser", httpx.AsyncClient(transport=httpx.MockTransport(handler)))
+        return requested
+
+    return install
+
+
+def test_cloudflare_challenge_is_fetched_in_browser(serve, browser):
+    serve(lambda request: httpx.Response(**CHALLENGE))
+    requested = browser({"status": 200, "url": PAGE, "response": RECIPE_HTML})
+    assert scrape().json()["title"] == "Pancakes"
+    assert requested == [PAGE]
+
+
+def test_cloudflare_challenge_without_browser_is_502(serve):
+    serve(lambda request: httpx.Response(**CHALLENGE))
+    assert scrape().status_code == 502
+
+
+def test_plain_403_skips_browser(serve, browser):
+    serve(lambda request: httpx.Response(403))
+    requested = browser({"status": 200, "url": PAGE, "response": RECIPE_HTML})
+    assert scrape().status_code == 502
+    assert requested == []
+
+
+@pytest.mark.parametrize(
+    "solution, status",
+    [
+        ({"status": 403, "url": PAGE, "response": "<title>Just a moment...</title>"}, "ok"),
+        (None, "error"),
+        ({"status": 200, "url": PAGE, "response": "a" * (main.MAX_PAGE_BYTES + 1)}, "ok"),
+    ],
+)
+def test_browser_failure_is_502(serve, browser, solution, status):
+    serve(lambda request: httpx.Response(**CHALLENGE))
+    browser(solution, status)
+    response = scrape()
+    assert response.status_code == 502
+    assert response.json() == {"detail": "Failed to fetch URL"}
+
+
+def test_browser_redirect_to_private_host_is_blocked(serve, browser):
+    serve(lambda request: httpx.Response(**CHALLENGE))
+    browser({"status": 200, "url": "http://127.0.0.1/admin", "response": RECIPE_HTML})
+    assert scrape().status_code == 400

@@ -23,6 +23,7 @@ Single-file FastAPI service (`main.py`) that fetches a recipe page and extracts 
 - `scrape_html(..., supported_only=False)`: site-specific scraper for the ~740 supported hosts, generic schema.org fallback for everything else.
 - Errors: 400 bad/blocked URL, 502 fetch failed, 404 no recipe (no title or no ingredients).
 - `block_private_hosts` (httpx request hook, runs on every redirect hop) rejects non-public IPs (SSRF guard); resolves `raw_host` (IDNA-encoded, what httpx connects to). Not DNS-rebinding safe (accepted).
+- Cloudflare fallback: a 403 with `cf-mitigated: challenge` is re-fetched through [Byparr](https://github.com/ThePhaseless/Byparr) (`POST $BYPARR_URL/v1`, a Camoufox browser that solves the challenge; needed for e.g. rewe.de from the server IP). One page at a time (`browser_slot`, ~500 MB per browser), 35 s incl. queueing (`BROWSER_DEADLINE_SECONDS`), lunix-api waits 60 s. No SSRF hook inside the browser, so the final URL's host is checked afterwards. Off when `BYPARR_URL` is unset.
 - Fetch limits: 5 MB body, 20 s total (`MAX_PAGE_BYTES`, `FETCH_DEADLINE_SECONDS`); parsing runs in a thread (`asyncio.to_thread`); `Accept-Encoding: identity`; servers that compress anyway: gzip/deflate decoded with a bounded zlib decoder (cap = decompressed size), other encodings rejected. Charset: Content-Type, else `<meta charset>`, else UTF-8. 502 details stay generic, causes are logged.
 - API keys = all non-empty `API_KEY_*` env vars, read at startup (restart to add keys). Applies to every route, incl. health `GET /`.
 
@@ -32,6 +33,7 @@ Single-file FastAPI service (`main.py`) that fetches a recipe page and extracts 
 | ----------- | -------------------------------------------------------------------------- |
 | `API_KEY_*` | One or more API keys for authenticating requests (e.g. `API_KEY_TEST=abc`) |
 | `PORT`      | Server port in Docker (default: 3000)                                      |
+| `BYPARR_URL` | Byparr base URL for the Cloudflare fallback (e.g. `http://byparr:8191`); unset = off |
 
 ### Deployment
 
